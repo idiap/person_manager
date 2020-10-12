@@ -1,0 +1,41 @@
+<!--
+
+Copyright (c) 2017-2020 Idiap Research Institute, <http://www.idiap.ch>
+
+Written by Olivier Canévet <olivier.canevet@idiap.ch>
+
+See COPYING file for the complete license text.
+
+-->
+
+<launch>
+
+  <arg name="color"      default="/naoqi_driver_node/camera/front/image_color"            doc="Color topic to subscribe to" />
+  <arg name="depth"      default="/naoqi_driver_node/camera/depth_registered/image_rect"  doc="Depth topic to subscribe to" />
+  <arg name="depth_info" default="/naoqi_driver_node/camera/depth_registered/camera_info" doc="Depth topic to subscribe to" />
+
+  <arg name="hz"             default="20"                 doc="How fast to publish results (Hz)" />
+  <arg name="models_path"    default="$(env HOME)/models" doc="Path to folder containing dlib/shape_predictor_68_face_landmarks.dat" />
+  <arg name="keep_threshold" default="0.2"                doc="Threshold below which 2 faces are considered too close to keep both of them" />
+  <arg name="reid_threshold" default="0.4"                doc="Threshold below which 2 faces are considered from the same person" />
+
+  <arg name="with_external_vfoa" default="false" doc="Whether to estimate the VFOA from external module" />
+  <arg name="with_external_gaze" default="false" doc="Whether to run HG3D gaze tracker" />
+
+  <arg name="with_visu"    default="0" doc="Whether to run the visualisation node of the manager" />
+  <arg name="with_markers" default="0" doc="Whether to publish RViz markers" />
+
+  <node name="person_manager"
+        pkg="person_manager"
+        type="person_manager_node.py"
+        args="--hz $(arg hz) --color $(arg color) --depth $(arg depth) --info $(arg depth_info) --dlib $(arg models_path)/dlib/shape_predictor_68_face_landmarks.dat --project-on-depth --keep-threshold $(arg keep_threshold) --reid-threshold $(arg reid_threshold) --use-gaze-tracker $(arg with_external_gaze) --use-vfoa-module $(arg with_external_vfoa)"
+        output="screen" />
+
+  <node if="$(arg with_visu)"
+        name="person_manager_viewer"
+        pkg="person_manager"
+        type="viewer_node.py"
+        args="--color $(arg color) --visu $(arg with_visu) --markers $(arg with_markers)"
+        output="screen" />
+
+</launch>

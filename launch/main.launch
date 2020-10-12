@@ -1,0 +1,59 @@
+<!--
+
+Copyright (c) 2017-2020 Idiap Research Institute, <http://www.idiap.ch>
+
+Written by Olivier Canévet <olivier.canevet@idiap.ch>
+
+See COPYING file for the complete license text.
+
+-->
+
+<launch>
+
+  <arg name="color"  default="/naoqi_driver_node/camera/front/image_raw" />
+  <arg name="depth"  default="/naoqi_driver_node/camera/depth/image_raw" />
+  <arg name="info"   default="/naoqi_driver_node/camera/depth/camera_info" />
+
+  <arg name="config" default="config_cv.ini" />
+  <arg name="width"  default="0" />
+  <arg name="height" default="0" />
+  <arg name="particles" default="50" />
+  <arg name="delay"     default="200" />
+  <arg name="opts"      default="" />
+
+  <arg name="dlib"      default="$(optenv HOME)/models/dlib/shape_predictor_68_face_landmarks.dat" />
+  <arg name="keep_thr"  default="0.1" />
+  <arg name="reid_thr"  default="0.4" />
+
+  <arg name="ssl_model" default="$(optenv HOME)/models/audio/rec_stft_resnetctx_c25a0_1task"/>
+
+  <arg name="viewer" default="false"/>
+
+  <node name="person_tracker"
+        pkg="particle_person_tracker"
+        type="openpose_facetrack"
+        args="-c /home/ocanevet/wss/perception_ws/devel/lib/particle_person_tracker/config_openpose.ini -i ros://$(arg color) -d ros:///tracklet -h $(arg height) -w $(arg width) -t $(arg delay) -p $(arg particles) $(arg opts)"
+        output="screen"/>
+
+  <node name="ssl"
+        pkg="audio_perception"
+        type="ssl_nn.py"
+        args="-n stft --context-frames=25 --frame-id=Head $(arg ssl_model)"
+        output="screen"/>
+
+  <node name="manager"
+        pkg="person_manager"
+        type="person_manager_node.py"
+        args="--color $(arg color) --depth $(arg depth) --info $(arg info) --dlib $(arg dlib) --keep-threshold $(arg keep_thr) --reid-threshold $(arg reid_thr)"
+        output="screen"/>
+
+  <group if="$(arg viewer)">
+    <node name="perception_viewer"
+          pkg="person_manager"
+          type="viewer_node.py"
+          args="--color $(arg color) --visu 1 --markers 0"
+          output="screen"/>
+
+  </group>
+
+</launch>

@@ -1,0 +1,207 @@
+<!--
+
+Copyright (c) 2017-2020 Idiap Research Institute, <http://www.idiap.ch>
+
+Written by Olivier Canévet <olivier.canevet@idiap.ch>
+
+See COPYING file for the complete license text.
+
+-->
+
+<launch>
+  <!-- Camera topics which can be set manually or by using one of:
+        kinect:=1
+        intel:=1
+        naoqi:=1
+        adapted:=1
+  -->
+  <arg name="color"      default="" doc="Color image topic" />
+  <arg name="color_info" default="" doc="Color info topic" />
+  <arg name="depth"      default="" doc="Depth image topic" />
+  <arg name="depth_info" default="" doc="Depth info topic" />
+
+  <arg name="start_camera"  default="0" doc="Whether to start the cameras (useful when working with rosbag)" />
+
+  <!-- Camera selection -->
+  <arg name="webcam"       default="0" doc="Whether to use OpenCV Webcam" />
+  <arg name="kinect"       default="0" doc="Whether to use Kinect camera" />
+  <arg name="intel"        default="0" doc="Whether to use Intel D400 cameras" />
+  <arg name="naoqi"        default="0" doc="Whether to use NAOqi driver topics" />
+  <arg name="adapted"      default="0" doc="Whether to use the Adapted Pepper (Intel camera on Pepper)" />
+  <arg name="naoqiadapted" default="0" doc="Whether to use default camera of Adapted Pepper (no depth)" />
+
+  <!-- Arguments specific to one type of camera -->
+  <arg name="kinect_resolution" default="qhd" doc="Resolution: sd/qhd/hd" />
+
+  <!-- Arguments common to several cameras -->
+  <arg name="camera_fps"    default="15"                  doc="Camera fps"/>
+  <arg name="camera_width"  default="640"                 doc="Camera image width"/>
+  <arg name="camera_height" default="480"                 doc="Camera image height"/>
+  <arg name="calib_path"    default="$(env HOME)/calib"   doc="Path to camera calibration folder"/>
+
+  <arg name="models_path"   default="$(env HOME)/models"  doc="Path to models"/>
+
+  <!-- Arguments for tracker -->
+  <arg name="tracker_detector"   default="cv"  doc="Face detector type cv|openpose|openheadpose" />
+  <arg name="tracker_particles"  default="100" doc="Number of particles (larger=more accurate but slower)" />
+  <arg name="tracker_delay"      default="50"  doc="Delay to call face detector (smaller=more accurate but slower)" />
+  <arg name="tracker_width"      default="320" doc="Image width for processing (use with height, not with scale)" />
+  <arg name="tracker_height"     default="240" doc="Image height for processing (use with width, not with scale)" />
+  <arg name="tracker_scale"      default="0.5" doc="Image scale for processing (alternative to width/height)" />
+  <arg name="tracker_min_height" default="0.2" doc="Minimum  height ratio to continue tracking" />
+  <arg name="tracker_visu"       default="0"   doc="Whether to display results" />
+
+  <!-- Arguments for audio localisation -->
+  <arg name="with_audio"        default="1"    doc="Whether to enable the sound source localization" />
+  <arg if="$(eval naoqi)"       name="final_audio_model" default="$(arg models_path)/audio/rec_stft_resnetctx_c25a0_1task"                                     doc="Path to speech localisation model if old Pepper robot"/>
+  <arg if="$(eval adapted or naoqiadapted)"     name="final_audio_model" default="$(arg models_path)/audio/pepper2_stae_d1m_resnet2st_st_s1ep1_ep5_b100_aug_adapt_fl_ap5_ep40" doc="Path to speech localisation model if adapted Pepper"/>
+
+  <arg name="with_external_gaze" default="false" doc="Whether to run gaze tracker" />
+  <arg name="with_external_vfoa" default="false" doc="Whether to use external VFOA estimator" />
+
+  <!-- Arguments for manager -->
+  <arg name="manager_hz"              default="20"    doc="Speed at which to run the manager main loop"/>
+  <arg name="manager_vfoa"            default="0"     doc="Whether to use external vfoa module"/>
+  <arg name="manager_visu"            default="1"     doc="Whether to visualize the manager output (re-id/voice activity/etc.)"/>
+  <arg name="manager_markers"         default="0"     doc="Whether to visualize the manager output (re-id/voice activity/etc.)"/>
+  <arg name="manager_keep_threshold"  default="0.1"   doc="Threshold below which 2 faces are considered too close to keep both of them"/>
+  <arg name="manager_reid_threshold"  default="0.4"   doc="Threshold below which 2 faces are considered from the same person" />
+
+  <!-- Arguments for audio -->
+  <arg name="audio_amplify" default="0.0" doc="Amplify input as dB in power"/>
+
+  <!-- For Pepper camera, the register depth should be run -->
+
+  <!-- Intel D400 camera -->
+  <include if="$(eval intel and start_camera)" file="$(find realsense2_camera)/launch/rs_camera.launch">
+    <arg name="depth_width"    value="$(arg camera_width)" />
+    <arg name="depth_height"   value="$(arg camera_height)" />
+    <arg name="enable_depth"   value="true" />
+
+    <arg name="infra_width"    value="$(arg camera_width)" />
+    <arg name="infra_height"   value="$(arg camera_height)" />
+    <arg name="enable_infra1"  value="true" />
+    <arg name="enable_infra2"  value="true" />
+
+    <arg name="color_width"    value="$(arg camera_width)" />
+    <arg name="color_height"   value="$(arg camera_height)" />
+    <arg name="enable_color"   value="true" />
+
+    <arg name="depth_fps"      value="$(arg camera_fps)" />
+    <arg name="infra_fps"      value="$(arg camera_fps)" />
+    <arg name="color_fps"      value="$(arg camera_fps)" />
+
+    <arg name="enable_sync" value="true" />
+    <arg name="align_depth" value="true" />
+  </include>
+
+  <!-- Kinect camera -->
+  <include if="$(eval kinect and start_camera)" file="$(find kinect2_bridge)/launch/kinect2_bridge.launch">
+    <arg name="publish_tf"      value="false"/>
+    <arg name="fps_limit"       value="$(arg camera_fps)"/>
+    <arg name="calib_path"      value="$(arg calib_path)"/>
+    <arg name="worker_threads"  value="2"/>
+    <arg name="output"          value="log"/>
+  </include>
+
+  <!-- Set the final color topic depending on previous options:
+        - final_color
+        - final_color_info
+        - final_depth
+        - final_depth_info
+  -->
+  <arg if="$(eval color != '')" name="final_color"      default="$(arg color)" />
+  <arg if="$(eval color != '')" name="final_color_info" default="$(arg color_info)" />
+  <arg if="$(eval color != '')" name="final_depth"      default="$(arg depth)" />
+  <arg if="$(eval color != '')" name="final_depth_info" default="$(arg depth_info)" />
+
+  <arg if="$(arg webcam)"       name="final_color"      default="/camera/image_raw" />
+  <arg if="$(arg webcam)"       name="final_color_info" default="/camera/camera_info" />
+  <arg if="$(arg webcam)"       name="final_depth"      default="/UNSET_TOPIC" />
+  <arg if="$(arg webcam)"       name="final_depth_info" default="/UNSET_TOPIC" />
+
+  <arg if="$(arg intel)"        name="final_color"      default="/camera/color/image_raw/compressed" />
+  <arg if="$(arg intel)"        name="final_color_info" default="/camera/color/camera_info" />
+  <arg if="$(arg intel)"        name="final_depth"      default="/camera/aligned_depth_to_color/image_raw" />
+  <arg if="$(arg intel)"        name="final_depth_info" default="/camera/aligned_depth_to_color/camera_info" />
+
+  <arg if="$(arg adapted)"      name="final_color"      default="/camera/color/image_raw/compressed" />
+  <arg if="$(arg adapted)"      name="final_color_info" default="/camera/color/camera_info" />
+  <arg if="$(arg adapted)"      name="final_depth"      default="/camera/aligned_depth_to_color/image_raw" />
+  <arg if="$(arg adapted)"      name="final_depth_info" default="/camera/aligned_depth_to_color/camera_info" />
+
+  <arg if="$(arg kinect)"       name="final_color"      default="/kinect2/$(arg kinect_resolution)/image_color_rect" />
+  <arg if="$(arg kinect)"       name="final_color_info" default="/kinect2/$(arg kinect_resolution)/camera_info" />
+  <arg if="$(arg kinect)"       name="final_depth"      default="/kinect2/$(arg kinect_resolution)/image_depth_rect" />
+  <arg if="$(arg kinect)"       name="final_depth_info" default="/kinect2/$(arg kinect_resolution)/camera_info" />
+
+  <arg if="$(arg naoqi)"        name="final_color"      default="/naoqi_driver_node/camera/front/image_rect_color" />
+  <arg if="$(arg naoqi)"        name="final_color_info" default="/naoqi_driver_node/camera/front/camera_info" />
+  <arg if="$(arg naoqi)"        name="final_depth"      default="/naoqi_driver_node/camera/depth_registered/image_rect" />
+  <arg if="$(arg naoqi)"        name="final_depth_info" default="/naoqi_driver_node/camera/depth_registered/camera_info" />
+
+  <arg if="$(arg naoqiadapted)" name="final_color"      default="/naoqi_driver_node/camera/front/image_raw" />
+  <arg if="$(arg naoqiadapted)" name="final_color_info" default="/naoqi_driver_node/camera/front/camera_info" />
+  <arg if="$(arg naoqiadapted)" name="final_depth"      default="/UNSET_TOPIC" />
+  <arg if="$(arg naoqiadapted)" name="final_depth_info" default="/UNSET_TOPIC" />
+
+  <!-- Tracker -->
+  <include file="$(find particle_person_tracker)/launch/main.launch">
+    <arg name="config"           value="config_openpose.ini" />
+    <arg name="color"            value="$(arg final_color)" />
+    <arg name="width"            value="$(arg tracker_width)" />
+    <arg name="height"           value="$(arg tracker_height)" />
+    <arg name="scale"            value="$(arg tracker_scale)" />
+    <arg name="detector"         value="$(arg tracker_detector)" />
+    <arg name="particles"        value="$(arg tracker_particles)" />
+    <arg name="delay"            value="$(arg tracker_delay)" />
+    <arg name="min_height_ratio" value="$(arg tracker_min_height)" />
+    <arg name="visu"             value="$(arg tracker_visu)" />
+  </include>
+
+  <!-- Sound source localiser -->
+  <group if="$(arg with_audio)">
+    <node if="$(arg naoqi)"
+          pkg="audio_perception"
+          type="ssl_nn.py"
+          name="ssl"
+          args="-n stft --amplify $(arg audio_amplify) --context-frames=25 --frame-id=Head $(arg final_audio_model)"
+          output="screen" />
+    <node if="$(eval adapted or naoqiadapted)"
+          pkg="audio_perception"
+          type="ssl_nn.py"
+          name="ssl"
+          args="-n stft --frame-id=Head $(arg final_audio_model)"
+          output="screen" />
+  </group>
+
+  <!-- Person manager -->
+  <include file="$(find person_manager)/launch/manager.launch">
+    <arg name="color"              value="$(arg final_color)" />
+    <arg name="depth"              value="$(arg final_depth)" />
+    <arg name="depth_info"         value="$(arg final_depth_info)" />
+    <arg name="hz"                 value="$(arg manager_hz)" />
+    <arg name="models_path"        value="$(arg models_path)" />
+    <arg name="keep_threshold"     value="$(arg manager_keep_threshold)" />
+    <arg name="reid_threshold"     value="$(arg manager_reid_threshold)" />
+    <arg name="with_external_gaze" value="$(arg with_external_gaze)" />
+    <arg name="with_external_vfoa" value="$(arg with_external_vfoa)" />
+    <arg name="with_visu"          value="$(arg manager_visu)" />
+    <arg name="with_markers"       value="$(arg manager_markers)" />
+  </include>
+
+  <!-- Gaze tracker -->
+  <include if="$(arg with_external_gaze)" file="$(find hg3d_ros)/launch/hg3d.launch">
+    <arg name="color"            value="$(arg final_color)" />
+    <arg name="color_info"       value="$(arg final_color_info)" />
+    <arg name="depth"            value="$(arg final_depth)" />
+    <arg name="depth_info"       value="$(arg final_depth_info)" />
+    <arg name="disable_at_start" value="1" />
+  </include>
+
+  <node pkg="tf2_ros"
+        name="robot_to_intel_publisher"
+        type="static_transform_publisher"
+        args="0 0 0 0 0 0 CameraTop_frame camera_link"/>
+
+</launch>
